@@ -1,0 +1,8 @@
+.vs
+Debug
+Release
+x64
+bin
+obj
+*.vcxproj.user
+*.vcxproj.filters
