@@ -165,8 +165,8 @@
     <ClCompile Include="dllmain.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\3rdparty\detours\vc\Detours.vcxproj">
-      <Project>{37489709-8054-4903-9c49-a79846049fc9}</Project>
+    <ProjectReference Include="..\3rdparty\Detours.vcxproj">
+      <Project>{6a61b1c0-8229-4200-99b4-ef2ef1f5014f}</Project>
       <LinkLibraryDependencies>false</LinkLibraryDependencies>
       <Private>false</Private>
       <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
