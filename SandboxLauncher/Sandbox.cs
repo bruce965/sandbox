@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Runtime.InteropServices;
 
-namespace SandboxedLauncher
+namespace SandboxLauncher
 {
     public class Sandbox : IDisposable
     {
@@ -9,10 +9,8 @@ namespace SandboxedLauncher
 
 		public Sandbox(string name, Guid guid)
 		{
-			if (!PInvoke.CreateSandbox(out handle, name, guid))
-			{
-				throw new Exception($"Error while creating a sandbox: {Marshal.GetLastWin32Error()}");
-			}
+			if (!PInvoke.CreateSandbox(out handle, name, guid, out var errorMessage, out var errorCode))
+				throw new SandboxException(errorMessage, errorCode);
 		}
 
 		/// <summary>
@@ -23,10 +21,8 @@ namespace SandboxedLauncher
 		{
 			CheckNotDisposed();
 
-			if (!PInvoke.StartSandboxProcess(handle, commandLine))
-			{
-				throw new Exception($"Error while running in sandbox: {Marshal.GetLastWin32Error()}");
-			}
+			if (!PInvoke.StartSandboxProcess(handle, commandLine, out var errorMessage, out var errorCode))
+				throw new SandboxException(errorMessage, errorCode);
 		}
 
 		/// <summary>
@@ -90,10 +86,10 @@ namespace SandboxedLauncher
 #endif
 
 			[DllImport(SANDBOX_DLL, CallingConvention = CallingConvention.Cdecl, SetLastError = true, CharSet = CharSet.Unicode)]
-			public static extern bool CreateSandbox(out IntPtr sandbox, string name, Guid guid);
+			public static extern bool CreateSandbox(out IntPtr sandbox, string name, Guid guid, [MarshalAs(UnmanagedType.BStr)] out string errorMessage, out int errorCode);
 
 			[DllImport(SANDBOX_DLL, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Unicode)]
-			public static extern bool StartSandboxProcess(IntPtr sandbox, string commandLine);
+			public static extern bool StartSandboxProcess(IntPtr sandbox, string commandLine, [MarshalAs(UnmanagedType.BStr)] out string errorMessage, out int errorCode);
 
 			[DllImport(SANDBOX_DLL, CallingConvention = CallingConvention.Cdecl)]
 			public static extern bool GetSandboxMessage(IntPtr sandbox, out MessageType message, out IntPtr data);

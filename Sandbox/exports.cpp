@@ -9,7 +9,9 @@
 BOOL __cdecl CreateSandbox(
 	PHANDLE phSandbox,
 	LPCWSTR lpName,
-	GUID guid)
+	GUID guid,
+	BSTR* errorMessage,
+	DWORD* errorCode)
 {
 	try
 	{
@@ -21,18 +23,23 @@ BOOL __cdecl CreateSandbox(
 	}
 	catch (const SandboxException& e)
 	{
-		SetLastError(e.ErrorCode);
+		*errorMessage = e.AllocErrorMessage();
+		*errorCode = e.ErrorCode;
 		return FALSE;
 	}
 
+	*errorMessage = nullptr;
+	*errorCode = 0;
 	return TRUE;
 }
 
 BOOL __cdecl StartSandboxProcess(
 	HANDLE hSandbox,
-	LPCWSTR lpCommandLine)
+	LPCWSTR lpCommandLine,
+	BSTR* errorMessage,
+	DWORD* errorCode)
 {
-	Sandbox *sandbox = (Sandbox *)hSandbox;
+	Sandbox* sandbox = (Sandbox*)hSandbox;
 
 	try
 	{
@@ -41,10 +48,13 @@ BOOL __cdecl StartSandboxProcess(
 	}
 	catch (const SandboxException& e)
 	{
-		SetLastError(e.ErrorCode);
+		*errorMessage = e.AllocErrorMessage();
+		*errorCode = e.ErrorCode;
 		return FALSE;
 	}
 
+	*errorMessage = nullptr;
+	*errorCode = 0;
 	return TRUE;
 }
 

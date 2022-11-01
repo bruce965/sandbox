@@ -14,13 +14,16 @@
 #include "StartupInfo.h"
 #include "SecurityCapabilities.h"
 #include "AclHelper.h"
+#include "Shlwapi.h"
 
-#pragma comment(lib, "Userenv.lib")  // AppContainer
+#pragma comment(lib, "userenv.lib")  // AppContainer
+#pragma comment(lib, "shlwapi.lib")  // PathCombine
 
-LPCSTR rlpDlls[] = {
-	//"ntdll",
-	"sandbox-hooks32.dll",
-};
+// Skip hooking, disabling communication with the supervisor
+//#define DEBUG_SKIP_HOOKING 1
+
+// Skip sandboxing/containerization
+//#define DEBUG_SKIP_APPCONTAINER 1
 
 Sandbox::Sandbox(const std::wstring &name, const GUID &guid)
 {
@@ -31,6 +34,12 @@ Sandbox::Sandbox(const std::wstring &name, const GUID &guid)
 		guid.Data1, guid.Data2, guid.Data3,
 		guid.Data4[0], guid.Data4[1], guid.Data4[2], guid.Data4[3],
 		guid.Data4[4], guid.Data4[5], guid.Data4[6], guid.Data4[7]);
+
+	WCHAR szModuleFileName[MAX_PATH];
+	if (!GetModuleFileNameW(NULL, szModuleFileName, MAX_PATH))
+	{
+		throw SandboxException("Failed to get sandbox supervisor's module file name while constructing", GetLastError());
+	}
 
 	this->appContainerName = name.substr(0, 64 - (GUID_LENGTH + 1)) + L"_" + buff;
 
@@ -65,8 +74,18 @@ Sandbox::Sandbox(const std::wstring &name, const GUID &guid)
 		throw SandboxException("Unable to retrieve SID for 'ALL APPLICATION PACKAGES'", HRESULT_CODE(result));
 	}
 
-	AclHelper::GrantPermissions(sidAllAppPackages, L"sandbox-hooks32.dll", SE_FILE_OBJECT, FILE_GENERIC_READ | FILE_GENERIC_EXECUTE);
-	AclHelper::GrantPermissions(sidAllAppPackages, L"sandbox-hooks64.dll", SE_FILE_OBJECT, FILE_GENERIC_READ | FILE_GENERIC_EXECUTE);
+	WCHAR szDllFileName[MAX_PATH];
+	if (!PathCombineW(szDllFileName, szModuleFileName, L"..\\sandbox-hooks32.dll"))
+	{
+		throw SandboxException("Failed to combine sandbox supervisor's module file name with 32-bit DLL path", GetLastError());
+	}
+	AclHelper::GrantPermissions(sidAllAppPackages, szDllFileName, SE_FILE_OBJECT, FILE_GENERIC_READ | FILE_GENERIC_EXECUTE);
+
+	if (!PathCombineW(szDllFileName, szModuleFileName, L"..\\sandbox-hooks64.dll"))
+	{
+		throw SandboxException("Failed to combine sandbox supervisor's module file name with 64-bit DLL path", GetLastError());
+	}
+	AclHelper::GrantPermissions(sidAllAppPackages, szDllFileName, SE_FILE_OBJECT, FILE_GENERIC_READ | FILE_GENERIC_EXECUTE);
 
 	LocalFree(sidAllAppPackages);
 }
@@ -80,24 +99,63 @@ Sandbox::~Sandbox()
 
 void Sandbox::StartProcess(const std::wstring &commandLine)
 {
-	StartupInfo startupInfo(1);
+	StartupInfo startupInfo(2);
 
+#if !DEBUG_SKIP_APPCONTAINER
+	// run process in app container
 	SecurityCapabilities securityCapabilities(
 		this->sid,
 		{
-			WinCapabilityPrivateNetworkClientServerSid
+			WinCapabilityPrivateNetworkClientServerSid,
 		});
-
 	startupInfo.UpdateAttribute(
 		PROC_THREAD_ATTRIBUTE_SECURITY_CAPABILITIES,
 		securityCapabilities.get(),
 		SecurityCapabilities::size);
+#endif
 
-	// copy because it might be modified
-	std::wstring commandLineLocal = commandLine;
+	// do not allow to spawn child processes
+	DWORD childProcessRestricted = PROCESS_CREATION_CHILD_PROCESS_RESTRICTED;
+	startupInfo.UpdateAttribute(
+		PROC_THREAD_ATTRIBUTE_CHILD_PROCESS_POLICY,
+		&childProcessRestricted,
+		sizeof childProcessRestricted);
 
-	PROCESS_INFORMATION pProcessInfo;
+	HANDLE hReadPipe;
+	HANDLE hWritePipe;
+	if (!CreatePipe(&hReadPipe, &hWritePipe, NULL, 4096))
+	{
+		throw SandboxException("Failed to create anonymous pipe", GetLastError());
+	}
 
+	CHAR szModuleFileName[MAX_PATH];
+	if (!GetModuleFileNameA(NULL, szModuleFileName, MAX_PATH))
+	{
+		throw SandboxException("Failed to get sandbox supervisor's module file name while starting", GetLastError());
+	}
+
+	CHAR szDllFileName[MAX_PATH];
+	if (!PathCombineA(szDllFileName, szModuleFileName, "..\\sandbox-hooks32.dll"))
+	{
+		throw SandboxException("Failed to combine sandbox supervisor's module file name with DLL path", GetLastError());
+	}
+
+	std::wstring commandLineLocal = commandLine;  // copy because it might be modified
+	PROCESS_INFORMATION processInfo;
+#if DEBUG_SKIP_HOOKING
+	BOOL success = CreateProcessW(
+		NULL,
+		(LPWSTR)commandLineLocal.data(),
+		NULL,
+		NULL,
+		FALSE,
+		EXTENDED_STARTUPINFO_PRESENT,//| CREATE_SUSPENDED,
+		NULL,
+		NULL,
+		(LPSTARTUPINFOW)startupInfo.get(),
+		&processInfo);
+#else
+	LPCSTR rlpDlls[] = { szDllFileName };
 	BOOL success = DetourCreateProcessWithDllsW(
 		NULL,
 		(LPWSTR)commandLineLocal.data(),
@@ -108,20 +166,21 @@ void Sandbox::StartProcess(const std::wstring &commandLine)
 		NULL,
 		NULL,
 		(LPSTARTUPINFOW)startupInfo.get(),
-		&pProcessInfo,
+		&processInfo,
 		sizeof rlpDlls / sizeof rlpDlls[0],
 		rlpDlls,
 		NULL);
+#endif
 
 	if (!success)
 	{
 		throw SandboxException("Failed to create process", GetLastError());
 	}
 
-	CloseHandle(pProcessInfo.hThread);
+	CloseHandle(processInfo.hThread);
 
-	WaitForSingleObject(pProcessInfo.hProcess, INFINITE);
-	CloseHandle(pProcessInfo.hProcess);
+	//WaitForSingleObject(processInfo.hProcess, INFINITE);
+	CloseHandle(processInfo.hProcess);
 }
 
 bool Sandbox::NextMessage(MessageType *type, void **data)

@@ -3,7 +3,7 @@
 	<PropertyGroup>
 		<OutputType>Exe</OutputType>
 		<PlatformTarget>x86</PlatformTarget>
-		<TargetFramework>net472</TargetFramework>
+		<TargetFramework>net6.0</TargetFramework>
 		<LangVersion>9</LangVersion>
 		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 		<Nullable>enable</Nullable>
@@ -20,6 +20,16 @@
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 		</Content>
 		<Content Include="$(SolutionDir)x64\$(Configuration)\sandbox*.pdb" Condition="'$(Configuration)' == 'Debug'">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</Content>
+	</ItemGroup>
+
+	<ItemGroup>
+		<!-- Test -->
+		<Content Include="$(SolutionDir)$(Configuration)\Test*.exe">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</Content>
+		<Content Include="$(SolutionDir)$(Configuration)\Test*.pdb" Condition="'$(Configuration)' == 'Debug'">
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 		</Content>
 	</ItemGroup>

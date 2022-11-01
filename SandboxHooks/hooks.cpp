@@ -35,7 +35,7 @@ static BOOL debugWritingLog = FALSE;
 	}\
 }
 #else
-#define DEBUG_OPEN_LOG()
+#define DEBUG_OPEN_LOG(path)
 #define DEBUG_LOG(x, ...)
 #define DEBUG_CLOSE_LOG()
 #endif
@@ -174,7 +174,8 @@ static NTSTATUS NTAPI Fake_NtWaitForSingleObject(
 
 void HooksAttachAll()
 {
-	DEBUG_OPEN_LOG("C:\\Users\\User\\Documents\\Projects\\Sandbox\\SandboxLauncher\\bin\\Debug\\net472\\log.txt");
+	DEBUG_OPEN_LOG("log.txt");
+	//DEBUG_OPEN_LOG("X:\\projects\\Sandbox\\SandboxLauncher\\bin\\Debug\\net6.0\\log.txt");
 
 	DEBUG_LOG("INFO: HooksAttachAll...");
 
